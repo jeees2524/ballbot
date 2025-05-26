@@ -21,17 +21,21 @@ def webhook():
     data = request.get_json()
     for event in data.get('events', []):
 
-        if event['type'] == 'message' and event['message']['text'].strip().lower() == 'remove':
-            checked_in_users.clear()
-            session_info.update({"datetime": None, "location": None, "color": None, "created_by": None})
-            reply_text(event['replyToken'], "♻️ ข้อมูลทั้งหมดถูกรีเซ็ตเรียบร้อยแล้ว")
-            continue
-
         if event['type'] == 'message':
             user_id = event['source']['userId']
-            message_text = event['message']['text'].strip()
+            message_text = event['message']['text'].strip().lower()
 
-            if message_text.lower().startswith('checkin'):
+            if message_text == 'remove':
+                checked_in_users.clear()
+                session_info.update({"datetime": None, "location": None, "color": None, "created_by": None})
+                reply_text(event['replyToken'], "♻️ ข้อมูลทั้งหมดถึงรีเซ็ตเรียบร้อยแล้ว")
+                continue
+
+            if message_text == 'repeat':
+                reply_flex_message(event['replyToken'])
+                continue
+
+            if message_text.startswith('checkin'):
                 session_info['created_by'] = user_id
                 reply_datetime_input(event['replyToken'])
 
@@ -58,7 +62,6 @@ def webhook():
 
             elif action == 'action=checkin':
                 if user_id in checked_in_users:
-                    # ไม่ตอบซ้ำถ้าลงชื่อไปแล้ว
                     continue
                 profile = get_user_profile(user_id)
                 display_name = profile.get('displayName') or f"UID:{user_id[-4:]}"
@@ -236,8 +239,6 @@ def reply_cancel_confirmation(reply_token):
         "messages": [confirm_msg]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", json=body, headers=headers)
-
-# ... (ฟังก์ชันอื่นคงเดิมไม่เปลี่ยนแปลง)
 
 if __name__ == '__main__':
     app.run(port=3000)
