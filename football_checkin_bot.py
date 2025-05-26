@@ -13,8 +13,8 @@ app = Flask(__name__)
 CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
 
 # เก็บข้อมูลชั่วคราวในหน่วยความจำ
-sessions = []  # รองรับหลาย session
-checked_in_users = {}  # mapping: session_id -> { user_id: display_name }
+checked_in_users = {}
+session_info = {"datetime": None, "location": None, "color": None, "created_by": None}
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -26,73 +26,78 @@ def webhook():
             message_text = event['message']['text'].strip().lower()
 
             if message_text == 'remove':
-                sessions.clear()
                 checked_in_users.clear()
+                session_info.update({"datetime": None, "location": None, "color": None, "created_by": None})
                 reply_text(event['replyToken'], "♻️ ข้อมูลทั้งหมดถึงรีเซ็ตเรียบร้อยแล้ว")
                 continue
 
             if message_text == 'repeat':
-                if sessions:
-                    reply_flex_message(event['replyToken'], sessions[-1])
+                if all(session_info.values()):
+                    reply_flex_message(event['replyToken'])
                 else:
-                    reply_text(event['replyToken'], "❌ ยังไม่มีการ Checkin กรุณาพิมพ์ checkin เพื่อเริ่มใหม่")
+                    reply_text(event['replyToken'], "⚠️ ยังไม่มี session ปัจจุบัน กรุณาพิมพ์ checkin เพื่อเริ่มใหม่")
                 continue
 
             if message_text == 'รายชื่อ':
-                if sessions:
-                    reply_text(event['replyToken'], get_checkin_message(sessions[-1]))
-                else:
-                    reply_text(event['replyToken'], "📋 ยังไม่มี session ที่เปิดอยู่")
+                reply_text(event['replyToken'], get_checkin_message("📋 รายชื่อ"))
                 continue
 
             if message_text.startswith('checkin'):
-                session = {"datetime": None, "location": None, "color": None, "created_by": user_id}
-                sessions.append(session)
-                checked_in_users[id(session)] = {}
+                session_info['created_by'] = user_id
                 reply_datetime_input(event['replyToken'])
 
-            elif sessions and user_id == sessions[-1]['created_by'] and validate_datetime_format(message_text):
-                sessions[-1]['datetime'] = message_text
+            elif user_id == session_info['created_by'] and validate_datetime_format(message_text):
+                session_info['datetime'] = message_text
                 reply_location_options(event['replyToken'])
 
-            elif sessions and user_id == sessions[-1]['created_by'] and sessions[-1]['datetime'] is None:
-                reply_text(event['replyToken'], "❌ รูปแบบไม่ถูกต้อง กรุณาพิมพ์ในรูปแบบ: 26/05/68 18:00")
+            elif user_id == session_info['created_by'] and session_info['datetime'] is None:
+                reply_text(event['replyToken'], "❌ รูปแบบไม่ถูกต้อง กรุณาพิมพ์ในรูปแบบ: DD/MM/YY 18:00")
 
-        elif event['type'] == 'postback' and sessions:
-            session = sessions[-1]
+        elif event['type'] == 'postback':
             user_id = event['source']['userId']
             profile = get_user_profile(user_id)
             display_name = profile.get('displayName') or f"UID:{user_id[-4:]}"
             action = event['postback']['data']
 
-            if action.startswith('location=') and user_id == session['created_by']:
-                session['location'] = action.split('=')[1]
+            if action.startswith('location=') and user_id == session_info['created_by']:
+                session_info['location'] = action.split('=')[1]
                 reply_color_options(event['replyToken'])
 
-            elif action.startswith('color=') and user_id == session['created_by']:
-                session['color'] = action.split('=')[1]
-                reply_flex_message(event['replyToken'], session)
+            elif action.startswith('color=') and user_id == session_info['created_by']:
+                session_info['color'] = action.split('=')[1]
+                reply_flex_message(event['replyToken'])
 
             elif action == 'action=checkin':
-                if user_id in checked_in_users[id(session)]:
+                if not all(session_info.values()):
+                    reply_text(event['replyToken'], "⚠️ Session หมดอายุแล้ว กรุณาพิมพ์ checkin เพื่อเริ่มใหม่")
                     continue
-                checked_in_users[id(session)][user_id] = display_name
-                reply_text(event['replyToken'], get_checkin_message(session))
+                if user_id in checked_in_users:
+                    continue
+                profile = get_user_profile(user_id)
+                display_name = profile.get('displayName') or f"UID:{user_id[-4:]}"
+                checked_in_users[user_id] = display_name
+                reply_text(event['replyToken'], get_checkin_message(display_name))
 
             elif action == 'action=request_cancel':
-                if user_id in checked_in_users[id(session)]:
+                if user_id in checked_in_users and not checked_in_users[user_id].endswith("(confirming)"):
+                    checked_in_users[user_id] += " (confirming)"
                     reply_cancel_confirmation(event['replyToken'])
+                elif user_id in checked_in_users:
+                    reply_text(event['replyToken'], f"⚠️ {display_name} อยู่ระหว่างการยืนยันการยกเลิกแล้ว")
                 else:
                     reply_text(event['replyToken'], f"⚠️ {display_name} ยังไม่ได้ลงชื่อ")
 
             elif action == 'action=confirm_cancel':
-                if user_id in checked_in_users[id(session)]:
-                    del checked_in_users[id(session)][user_id]
-                    reply_text(event['replyToken'], get_checkin_message(session))
+                if user_id in checked_in_users:
+                    name = checked_in_users[user_id].replace(" (confirming)", "")
+                    del checked_in_users[user_id]
+                    reply_text(event['replyToken'], get_checkin_message(name))
                 else:
                     reply_text(event['replyToken'], f"⚠️ {display_name} ยังไม่ได้ลงชื่อ")
 
             elif action == 'action=cancel':
+                if user_id in checked_in_users and checked_in_users[user_id].endswith("(confirming)"):
+                    checked_in_users[user_id] = checked_in_users[user_id].replace(" (confirming)", "")
                 reply_text(event['replyToken'], "✅ ยกเลิกการยกเลิกแล้ว")
 
     return '', 200
@@ -108,13 +113,13 @@ def get_color_emoji(color):
         'น้ำเงิน': '🔵'
     }.get(color, '👕')
 
-def get_checkin_message(session):
-    users = list(checked_in_users.get(id(session), {}).values())
-    name_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(users)])
-    total = f"\n👥 จำนวนผู้ลงชื่อ: {len(users)} คน"
-    color_emoji = get_color_emoji(session['color'])
-    session_text = f"\n📆 วันเวลา: {session['datetime']}\n📍 สถานที่: {session['location']}\n{color_emoji} สีเสื้อ: {session['color']}" if all(session.values()) else ""
-    return f"📋 รายชื่อที่ลงแล้ว:{session_text}\n\n{name_list}{total}"
+def get_checkin_message(display_name):
+    names = list(checked_in_users.values())
+    name_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(names)])
+    total = f"\n👥 จำนวนผู้ลงชื่อ: {len(names)} คน"
+    color_emoji = get_color_emoji(session_info['color'])
+    session = f"\n📆 วันเวลา: {session_info['datetime']}\n📍 สถานที่: {session_info['location']}\n{color_emoji} สีเสื้อ: {session_info['color']}" if all(session_info.values()) else ""
+    return f"✅ {display_name} ลงชื่อเรียบร้อยแล้ว!{session}\n\n📋 รายชื่อที่ลงแล้ว:\n{name_list}{total}"
 
 def reply_text(reply_token, text):
     headers = {
@@ -130,7 +135,7 @@ def reply_text(reply_token, text):
     requests.post("https://api.line.me/v2/bot/message/reply", json=body, headers=headers)
 
 def reply_datetime_input(reply_token):
-    reply_text(reply_token, "📅 กรุณาพิมพ์วันเวลาในรูปแบบ: 26/05/68 18:00")
+    reply_text(reply_token, "📅 กรุณาพิมพ์วันเวลาในรูปแบบ: DD/MM/YY 18:00")
 
 def reply_location_options(reply_token):
     headers = {
@@ -185,7 +190,7 @@ def reply_color_options(reply_token):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", json=body, headers=headers)
 
-def reply_flex_message(reply_token, session):
+def reply_flex_message(reply_token):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -199,7 +204,7 @@ def reply_flex_message(reply_token, session):
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {"type": "text", "text": f"เตะบอล {session['datetime']} ที่ {session['location']} สีเสื้อ {session['color']}", "weight": "bold", "size": "lg"},
+                    {"type": "text", "text": f"เตะบอล {session_info['datetime']} ที่ {session_info['location']} สีเสื้อ {session_info['color']}", "weight": "bold", "size": "lg"},
                     {
                         "type": "button",
                         "action": {"type": "postback", "label": "✅ ลงชื่อ", "data": "action=checkin"},
