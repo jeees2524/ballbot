@@ -69,19 +69,25 @@ def webhook():
                 reply_text(event['replyToken'], get_checkin_message(display_name))
 
             elif action == 'action=request_cancel':
-                if user_id in checked_in_users:
+                if user_id in checked_in_users and not checked_in_users[user_id].endswith("(confirming)"):
+                    checked_in_users[user_id] += " (confirming)"
                     reply_cancel_confirmation(event['replyToken'])
+                elif user_id in checked_in_users:
+                    reply_text(event['replyToken'], f"⚠️ {display_name} อยู่ระหว่างการยืนยันการยกเลิกแล้ว")
                 else:
                     reply_text(event['replyToken'], f"⚠️ {display_name} ยังไม่ได้ลงชื่อ")
 
             elif action == 'action=confirm_cancel':
                 if user_id in checked_in_users:
+                    name = checked_in_users[user_id].replace(" (confirming)", "")
                     del checked_in_users[user_id]
-                    reply_text(event['replyToken'], get_checkin_message(display_name))
+                    reply_text(event['replyToken'], get_checkin_message(name))
                 else:
                     reply_text(event['replyToken'], f"⚠️ {display_name} ยังไม่ได้ลงชื่อ")
 
             elif action == 'action=cancel':
+                if user_id in checked_in_users and checked_in_users[user_id].endswith("(confirming)"):
+                    checked_in_users[user_id] = checked_in_users[user_id].replace(" (confirming)", "")
                 reply_text(event['replyToken'], "✅ ยกเลิกการยกเลิกแล้ว")
 
     return '', 200
@@ -98,18 +104,12 @@ def get_color_emoji(color):
     }.get(color, '👕')
 
 def get_checkin_message(display_name):
-    names = list(checked_in_users.values())
+    names = [name.replace(" (confirming)", "") for name in checked_in_users.values()]
     name_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(names)])
     total = f"\n👥 จำนวนผู้ลงชื่อ: {len(names)} คน"
     color_emoji = get_color_emoji(session_info['color'])
     session = f"\n📆 วันเวลา: {session_info['datetime']}\n📍 สถานที่: {session_info['location']}\n{color_emoji} สีเสื้อ: {session_info['color']}" if all(session_info.values()) else ""
     return f"✅ {display_name} ลงชื่อเรียบร้อยแล้ว!{session}\n\n📋 รายชื่อที่ลงแล้ว:\n{name_list}{total}"
-
-def get_cancel_message(display_name):
-    names = list(checked_in_users.values())
-    name_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(names)])
-    total = f"\n👥 จำนวนผู้ลงชื่อ: {len(names)} คน" if names else ""
-    return f"❌ {display_name} ยกเลิกการลงชื่อแล้ว\n\n📋 รายชื่อที่ลงแล้ว:\n{name_list}{total}" if names else f"❌ {display_name} ยกเลิกการลงชื่อแล้ว\n\n📋 ยังไม่มีใครลงชื่อ"
 
 def reply_text(reply_token, text):
     headers = {
