@@ -13,6 +13,7 @@ app = Flask(__name__)
 CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
 
 # เก็บข้อมูลชั่วคราวในหน่วยความจำ
+# แก้ auto deploy
 checked_in_users = {}
 session_info = {"datetime": None, "location": None, "color": None, "created_by": None}
 external_id_counter = 1  # สำหรับนับคนนอกกลุ่ม
