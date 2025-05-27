@@ -23,26 +23,47 @@ def webhook():
 
         if event['type'] == 'message':
             user_id = event['source']['userId']
-            message_text = event['message']['text'].strip().lower()
+            message_text = event['message']['text'].strip()
+            message_text_lower = message_text.lower()
 
-            if message_text == 'remove':
+            if message_text_lower == 'remove':
                 checked_in_users.clear()
                 session_info.update({"datetime": None, "location": None, "color": None, "created_by": None})
                 reply_text(event['replyToken'], "♻️ ข้อมูลทั้งหมดถึงรีเซ็ตเรียบร้อยแล้ว")
                 continue
 
-            if message_text == 'repeat':
+            if message_text_lower == 'repeat':
                 if all(session_info.values()):
                     reply_flex_message(event['replyToken'])
                 else:
                     reply_text(event['replyToken'], "⚠️ ยังไม่มี session ปัจจุบัน กรุณาพิมพ์ checkin เพื่อเริ่มใหม่")
                 continue
 
-            if message_text == 'รายชื่อ':
+            if message_text_lower == 'รายชื่อ':
                 reply_text(event['replyToken'], get_checkin_message("📋 รายชื่อ"))
                 continue
 
-            if message_text.startswith('checkin'):
+            if message_text_lower.startswith('@add'):
+                name = message_text[4:].strip()
+                if name:
+                    synthetic_id = f"external_{len(checked_in_users)+1}"
+                    checked_in_users[synthetic_id] = name
+                    reply_text(event['replyToken'], f"✅ เพิ่ม {name} ในรายชื่อแล้ว\n\n" + get_checkin_message(name))
+                else:
+                    reply_text(event['replyToken'], "⚠️ กรุณาระบุชื่อหลังคำสั่ง @add เช่น @add สมชาย")
+                continue
+
+            if message_text_lower.startswith('@clear'):
+                try:
+                    index = int(message_text[6:].strip()) - 1
+                    key_to_remove = list(checked_in_users.keys())[index]
+                    name = checked_in_users.pop(key_to_remove)
+                    reply_text(event['replyToken'], f"✅ ลบ {name} ออกจากรายชื่อแล้ว\n\n" + get_checkin_message("รายชื่อ"))
+                except:
+                    reply_text(event['replyToken'], "⚠️ รูปแบบคำสั่งไม่ถูกต้อง เช่น @clear 3 หรือลำดับไม่อยู่ในช่วงรายชื่อ")
+                continue
+
+            if message_text_lower.startswith('checkin'):
                 session_info['created_by'] = user_id
                 reply_datetime_input(event['replyToken'])
 
@@ -73,8 +94,6 @@ def webhook():
                     continue
                 if user_id in checked_in_users:
                     continue
-                profile = get_user_profile(user_id)
-                display_name = profile.get('displayName') or f"UID:{user_id[-4:]}"
                 checked_in_users[user_id] = display_name
                 reply_text(event['replyToken'], get_checkin_message(display_name))
 
