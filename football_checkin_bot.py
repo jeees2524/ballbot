@@ -60,7 +60,7 @@ def webhook():
                     name = checked_in_users.pop(key_to_remove)
                     reply_text(event['replyToken'], f"✅ ลบ {name} ออกจากรายชื่อแล้ว\n\n" + get_checkin_message("รายชื่อ"))
                 except:
-                    reply_text(event['replyToken'], "⚠️ รูปแบบคำสั่งไม่ถูกต้อง เช่น @clear 3 หรือลำดับไม่อยู่ในช่วงรายชื่อ")
+                    reply_text(event['replyToken'], "⚠️ รูปแบบคำสั่งไม่ถูกต้อง เช่น @clear 1 หรือลำดับไม่อยู่ในช่วงรายชื่อ")
                 continue
 
             if message_text_lower.startswith('checkin'):
