@@ -15,9 +15,11 @@ CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
 # เก็บข้อมูลชั่วคราวในหน่วยความจำ
 checked_in_users = {}
 session_info = {"datetime": None, "location": None, "color": None, "created_by": None}
+external_id_counter = 1  # สำหรับนับคนนอกกลุ่ม
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
+    global external_id_counter
     data = request.get_json()
     for event in data.get('events', []):
 
@@ -46,7 +48,8 @@ def webhook():
             if message_text_lower.startswith('@add'):
                 name = message_text[4:].strip()
                 if name:
-                    synthetic_id = f"external_{len(checked_in_users)+1}"
+                    synthetic_id = f"external_{external_id_counter}"
+                    external_id_counter += 1
                     checked_in_users[synthetic_id] = name
                     reply_text(event['replyToken'], f"✅ เพิ่ม {name} ในรายชื่อแล้ว\n\n" + get_checkin_message(name))
                 else:
@@ -120,6 +123,7 @@ def webhook():
                 reply_text(event['replyToken'], "✅ ยกเลิกการยกเลิกแล้ว")
 
     return '', 200
+
 
 def validate_datetime_format(text):
     return re.match(r'^\d{2}/\d{2}/\d{2} \d{2}:\d{2}$', text)
