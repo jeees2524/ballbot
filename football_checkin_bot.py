@@ -60,7 +60,7 @@ def webhook():
                     name = checked_in_users.pop(key_to_remove)
                     reply_text(event['replyToken'], f"✅ ลบ {name} ออกจากรายชื่อแล้ว\n\n" + get_checkin_message("รายชื่อ"))
                 except:
-                    reply_text(event['replyToken'], "⚠️ รูปแบบคำสั่งไม่ถูกต้อง เช่น @clear 1 หรือลำดับไม่อยู่ในช่วงรายชื่อ")
+                    reply_text(event['replyToken'], "⚠️ รูปแบบคำสั่งไม่ถูกต้อง เช่น @clear 3 หรือลำดับไม่อยู่ในช่วงรายชื่อ")
                 continue
 
             if message_text_lower.startswith('checkin'):
@@ -154,7 +154,7 @@ def reply_text(reply_token, text):
     requests.post("https://api.line.me/v2/bot/message/reply", json=body, headers=headers)
 
 def reply_datetime_input(reply_token):
-    reply_text(reply_token, "📅 กรุณาพิมพ์วันเวลาในรูปแบบ: DD/MM/YY 18:00")
+    reply_text(reply_token, "📅 กรุณาพิมพ์วันเวลาในรูปแบบ: 26/05/68 18:00")
 
 def reply_location_options(reply_token):
     headers = {
